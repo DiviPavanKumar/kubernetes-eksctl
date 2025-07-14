@@ -1,9 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 ###############################################################################
 # workstation.sh (Ubuntu)
 # Installs: Docker Engine, kubectl, eksctl, helm, kubens
-# Usage   : sudo bash workstation.sh [--yes]
+# Usage   : sudo bash 02-workstation-Ubuntu.sh [--yes]
 ###############################################################################
+
 set -euo pipefail
 
 # ───────────── Versions ──────────────────────────────────────────────────────
@@ -55,15 +56,22 @@ validate $? "prerequisites"
 say "2. Setting up Docker repository ..."
 ARCH=$(dpkg --print-architecture)
 CODENAME=$(lsb_release -cs)
+DOCKER_KEYRING="/etc/apt/keyrings/docker.gpg"
 
 cmd install -m 0755 -d /etc/apt/keyrings
-cmd curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-    gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-validate $? "Docker GPG key"
+say "2. Downloading Docker GPG key ..."
+TEMP_KEY=$(mktemp)
+if curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor > "$TEMP_KEY"; then
+  cmd install -m 644 "$TEMP_KEY" "$DOCKER_KEYRING"
+  success "Docker GPG key added"
+else
+  fatal "Failed to fetch Docker GPG key"
+fi
+rm -f "$TEMP_KEY"
 
-echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu $CODENAME stable" \
-| tee /etc/apt/sources.list.d/docker.list >/dev/null
+echo \
+  "deb [arch=$ARCH signed-by=$DOCKER_KEYRING] https://download.docker.com/linux/ubuntu $CODENAME stable" \
+  | tee /etc/apt/sources.list.d/docker.list >/dev/null
 validate $? "Docker repo"
 
 say "2. Installing Docker components ..."
@@ -79,7 +87,7 @@ validate $? "Docker service"
 INVOCATOR=${SUDO_USER:-$(logname)}
 say "2. Adding users to docker group ..."
 cmd usermod -aG docker "$INVOCATOR"
-cmd usermod -aG docker ubuntu || true   # ignore if 'ubuntu' user does not exist
+cmd usermod -aG docker ubuntu || true
 validate 0 "docker group membership"
 
 # ───────────── 3. eksctl ─────────────────────────────────────────────────────
@@ -122,5 +130,5 @@ validate $? "Helm"
 
 # ───────────── Done ──────────────────────────────────────────────────────────
 say "${G}All tools installed successfully.${N}"
-echo -e "${Y}→ Docker group changes applied. Please **log out and log back in** (or run \`newgrp docker\`) so they take effect.${N}"
+echo -e "${Y}→ Docker group changes applied. Please log out and log back in (or run \`newgrp docker\`) to apply changes.${N}"
 echo "→ Full installation log: $LOGFILE"
