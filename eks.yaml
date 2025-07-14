@@ -2,7 +2,7 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: eks-spot-cluster-v2
+  name: eks-spot-cluster
   region: us-east-1
 
 managedNodeGroups: # this is also completely managed by AWS
