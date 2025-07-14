@@ -52,42 +52,26 @@ cmd apt-get install -y curl git tar gnupg lsb-release ca-certificates
 validate $? "prerequisites"
 
 # ───────────── 2. Docker Engine ──────────────────────────────────────────────
-say "2. Configuring Docker repository ..."
+say "2. Setting up Docker GPG key and repository ..."
 ARCH=$(dpkg --print-architecture)
 CODENAME=$(lsb_release -cs)
 KEYRING="/etc/apt/keyrings/docker.gpg"
-
 cmd install -m 0755 -d /etc/apt/keyrings
 
 TMP_ASC=$(mktemp)
 TMP_GPG=$(mktemp)
 
-say "2. Downloading Docker GPG key ..."
+say "→ Downloading Docker GPG key ..."
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o "$TMP_ASC"
 gpg --batch --yes --dearmor -o "$TMP_GPG" "$TMP_ASC"
 cmd install -m 644 "$TMP_GPG" "$KEYRING"
-success "Docker GPG key added"
 rm -f "$TMP_ASC" "$TMP_GPG"
+success "Docker GPG key installed"
 
-echo "deb [arch=$ARCH signed-by=$KEYRING] https://download.docker.com/linux/ubuntu $CODENAME stable" \
+echo \
+  "deb [arch=$ARCH signed-by=$KEYRING] https://download.docker.com/linux/ubuntu $CODENAME stable" \
   | tee /etc/apt/sources.list.d/docker.list >/dev/null
-validate $? "Docker repo"
-
-say "2. Installing Docker packages ..."
-cmd apt-get update -y
-cmd apt-get install -y docker-ce docker-ce-cli containerd.io \
-                       docker-buildx-plugin docker-compose-plugin
-validate $? "Docker install"
-
-say "2. Enabling Docker service ..."
-cmd systemctl enable --now docker
-validate $? "Docker service"
-
-INVOCATOR=${SUDO_USER:-$(logname)}
-say "2. Adding users to docker group ..."
-cmd usermod -aG docker "$INVOCATOR"
-cmd usermod -aG docker ubuntu || true
-success "Group membership updated"
+validate $? "Docker repo setup"
 
 # ───────────── 3. eksctl ─────────────────────────────────────────────────────
 say "3. Installing eksctl (${EKSCTL_VERSION:-latest}) ..."
