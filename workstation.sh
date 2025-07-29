@@ -1,112 +1,70 @@
-#!/bin/bash 
-###############################################################################
-# workstation.sh – RHEL EC2 Docker Setup (Safe EC2 Version)
-# Installs: Docker Engine, kubectl, eksctl, Helm, kubens
-# Supported: RHEL 8/9 (incl. Alma & Rocky) – ONLY
-###############################################################################
-set -euo pipefail
+#!/bin/bash
 
-KUBECTL_VERSION=""
-EKSCTL_VERSION="v0.181.0"
-HELM_INSTALL_SCRIPT="https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
+# Exit immediately if a command exits with a non-zero status
+set -e
 
-R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; N=$'\e[0m'
-SCRIPT_NAME=$(basename "$0")
-DATE=$(date +%F)
-LOGFILE="/tmp/${SCRIPT_NAME}-${DATE}.log"
-AUTO_YES="${1:-}"
+echo "🔧 Step 1: Installing Docker..."
 
-docker_user="ec2-user"
+# Update package list
+sudo yum update -y
 
-say()     { echo -e "${B}[$(date +%T)]${N} $*"; }
-success() { echo -e "  → ${G}OK${N}"; }
-fatal()   { echo -e "${R}ERROR:${N} $*"; exit 1; }
-cmd()     { "$@" &>>"$LOGFILE"; }
-validate(){ [[ "$1" -eq 0 ]] && success || fatal "$2 failed – see $LOGFILE"; }
-require_root(){ [[ "$(id -u)" -eq 0 ]] || fatal "Run as root (sudo)."; }
+# Install Docker
+sudo yum install -y docker
 
-confirm() {
-  if [[ "$AUTO_YES" == "--yes" ]]; then
-    say "Auto‑proceed enabled (--yes)"
-  else
-    read -rp "Proceed with installation? [y/N] " reply
-    [[ "$reply" =~ ^[Yy]$ ]] || { say "Aborted."; exit 0; }
-  fi
-}
+# Enable and start Docker service
+sudo systemctl enable docker
+sudo systemctl start docker
 
-require_root
-confirm
-say "Log file  : $LOGFILE"
+echo "✅ Docker installed and running."
 
-say "1. Installing prerequisites (dnf) ..."
-cmd dnf install -y dnf-plugins-core curl git tar gnupg lsb-release
-validate $? "prerequisites"
+# Add current user (ec2-user) to docker group to run Docker without sudo
+echo "➕ Adding ec2-user to docker group..."
+sudo usermod -aG docker ec2-user
 
-say "2. Adding Docker repo ..."
-cmd dnf config-manager --add-repo \
-  https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/docker-ce.repo
-validate $? "docker repo"
+# Apply group changes without logout/login
+# 'newgrp docker' starts a new shell with the new group applied
+# Using heredoc to execute in same script
+echo "🔄 Applying group changes for docker without logout..."
+newgrp docker <<EONG
+echo "✅ Group change applied using 'newgrp docker'. Docker is now usable without sudo."
+EONG
 
-say "3. Installing Docker Engine ..."
-cmd dnf install -y docker-ce docker-ce-cli containerd.io \
-                 docker-buildx-plugin docker-compose-plugin
-validate $? "docker install"
+echo "🐳 Docker setup complete."
 
-say "4. Enabling and starting Docker service ..."
-cmd systemctl enable --now docker
-validate $? "docker service"
+# --------------------------------------------------------------------
 
-say "5. Verifying ec2-user exists ..."
-if id "$docker_user" &>/dev/null; then
-  say " → ec2-user found. Checking and updating shell if necessary ..."
-  USER_SHELL=$(getent passwd $docker_user | cut -d: -f7)
-  if [[ "$USER_SHELL" != "/bin/bash" ]]; then
-    say " → Changing shell to /bin/bash for $docker_user ..."
-    cmd chsh -s /bin/bash $docker_user
-  fi
-else
-  fatal "ec2-user not found on this system."
-fi
+echo "🔧 Step 2: Installing kubectl (Kubernetes CLI)..."
 
-say "6. Adding ec2-user to docker group (safe method) ..."
-cmd groupadd -f docker
-say " → Groups before: $(id -nG $docker_user)"
-cmd usermod -aG docker $docker_user
-say " → Groups after: $(id -nG $docker_user)"
-validate $? "docker group assignment"
+# Download the latest stable kubectl binary (from AWS EKS repo)
+curl -o kubectl https://s3.us-west-2.amazonaws.com/amazon-eks/1.29.1/2024-05-31/bin/linux/amd64/kubectl
 
-echo -e "${Y}NOTE:${N} ec2-user must run 'newgrp docker' or reboot the instance to apply group changes."
-echo -e "Do NOT log out and log in immediately after this script if using SSH without reboot – it may cause connection issues."
+# Make the binary executable
+chmod +x kubectl
 
-echo ""
-say "7. Installing eksctl ..."
-[[ -z "$EKSCTL_VERSION" ]] && \
-  EKSCTL_VERSION=$(curl -s https://api.github.com/repos/weaveworks/eksctl/releases/latest \
-                    | grep -m1 tag_name | cut -d '"' -f4)
-EKS_TAR=/tmp/eksctl.tar.gz
-cmd curl -sL "https://github.com/weaveworks/eksctl/releases/download/${EKSCTL_VERSION}/eksctl_Linux_amd64.tar.gz" -o "$EKS_TAR"
-cmd tar -xzf "$EKS_TAR" -C /tmp
-cmd install -m 755 /tmp/eksctl /usr/local/bin/eksctl
-validate $? "eksctl"
+# Move it to a directory in PATH
+sudo mv kubectl /usr/local/bin/
 
-say "8. Installing kubectl ..."
-[[ -z "$KUBECTL_VERSION" ]] && \
-  KUBECTL_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
-cmd curl -sL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl
-cmd chmod 755 /usr/local/bin/kubectl
-validate $? "kubectl"
+# Verify installation
+echo "✅ kubectl installed. Version:"
+kubectl version --client
 
-say "9. Installing kubens ..."
-cmd git clone --depth 1 https://github.com/ahmetb/kubectx /opt/kubectx
-cmd ln -sf /opt/kubectx/kubens /usr/local/bin/kubens
-validate $? "kubens"
+# --------------------------------------------------------------------
 
-say "10. Installing Helm ..."
-cmd curl -fsSL -o get_helm.sh "$HELM_INSTALL_SCRIPT"
-cmd chmod 700 get_helm.sh
-cmd ./get_helm.sh
-validate $? "helm"
+echo "🔧 Step 3: Installing eksctl (EKS management CLI)..."
 
-say "${G}✔ All tools installed successfully.${N}"
-echo -e "${Y}→ To use Docker without sudo, run: ${N}newgrp docker${Y} or reboot the instance.${N}"
-echo "→ Log saved at: $LOGFILE"
+# Download and extract the latest eksctl release
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz
+
+# Move the binary to PATH
+sudo mv eksctl /usr/local/bin
+
+# Verify installation
+echo "✅ eksctl installed. Version:"
+eksctl version
+
+# --------------------------------------------------------------------
+
+echo "🎉 All tools installed successfully: Docker, kubectl, eksctl."
+echo "📌 Note: If you're using SSH, and 'docker' command still needs sudo,"
+echo "         run this command manually in your terminal:"
+echo "         👉 newgrp docker"
