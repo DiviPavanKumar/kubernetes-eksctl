@@ -7,11 +7,11 @@ metadata:
 
 managedNodeGroups:
   - name: roboshop
-    instanceTypes: ["m5.large", "c4.large", "c5.large"]
-    capacityType: SPOT
+    instanceTypes: ["m5.large", "c3.large", "c4.large", "c5.large"]
     minSize: 2
     maxSize: 4
     desiredCapacity: 3
+    spot: true
     ssh:
       publicKeyName: kubernetes
 
