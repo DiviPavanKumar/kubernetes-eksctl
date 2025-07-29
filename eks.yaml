@@ -6,9 +6,9 @@ metadata:
   region: us-east-1
 
 managedNodeGroups:
-  - name: roboshop-ng
-    capacityType: SPOT
+  - name: roboshop
     instanceTypes: ["m5.large", "c4.large", "c5.large"]
+    capacityType: SPOT
     minSize: 2
     maxSize: 4
     desiredCapacity: 3
