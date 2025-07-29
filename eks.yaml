@@ -7,15 +7,11 @@ metadata:
 
 managedNodeGroups:
   - name: roboshop-ng
-    spot: true
+    capacityType: SPOT
+    instanceTypes: ["m5.large", "c4.large", "c5.large"]
     minSize: 2
     maxSize: 4
     desiredCapacity: 3
-    instancesDistribution:
-      instanceTypes: ["m5.large", "c3.large", "c4.large", "c5.large"]
-      onDemandBaseCapacity: 0
-      onDemandPercentageAboveBaseCapacity: 0
-      spotInstancePools: 4
     ssh:
       publicKeyName: kubernetes
 
