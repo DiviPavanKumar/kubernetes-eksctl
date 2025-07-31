@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# DevOps Workstation Setup for EC2 (RHEL/CentOS)
-# Author: Pavan Kumar Divi
+# DevOps Workstation Setup Script for RHEL EC2
+# Author: Pavan Kumar Divi | Generated on 2025-07-31 13:00:45
 
 # ───── Colors ─────
 RED='\033[1;31m'
@@ -54,12 +54,16 @@ log "Installing kubectl..."
 KUBECTL_VER=$(curl -s https://dl.k8s.io/release/stable.txt)
 curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" >> "$LOG_FILE" 2>&1
 curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl.sha256" >> "$LOG_FILE" 2>&1
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check >> "$LOG_FILE" 2>&1
 
-chmod +x kubectl
-mv kubectl /usr/local/bin/kubectl
-KUBE_VERSION_OUTPUT=$(kubectl version --client --short 2>/dev/null || echo "Not available")
-success "kubectl installed. Version: $KUBE_VERSION_OUTPUT"
+if [[ -f "kubectl" && -f "kubectl.sha256" ]]; then
+  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check >> "$LOG_FILE" 2>&1
+  chmod +x kubectl
+  mv kubectl /usr/local/bin/kubectl
+  KUBE_VERSION_OUTPUT=$(kubectl version --client --short 2>/dev/null || echo "Not available")
+  success "kubectl installed. Version: $KUBE_VERSION_OUTPUT"
+else
+  error "kubectl or checksum file missing. Install failed"
+fi
 
 # ───── kubens ─────
 log "Installing kubens..."
@@ -70,15 +74,16 @@ success "kubens installed"
 # ───── Homebrew ─────
 log "Installing Homebrew with dependencies..."
 dnf install -y gcc git curl file bzip2 >> "$LOG_FILE" 2>&1
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >> "$LOG_FILE" 2>&1
+export NONINTERACTIVE=1
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >> "$LOG_FILE" 2>&1
 
 BREW_PREFIX="/home/linuxbrew/.linuxbrew"
 if [[ -x "$BREW_PREFIX/bin/brew" ]]; then
   eval "$($BREW_PREFIX/bin/brew shellenv)"
-  echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-  success "Homebrew installed and environment configured"
+  echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /etc/profile.d/brew.sh
+  success "Homebrew installed and configured"
 else
-  error "Homebrew install failed or not found"
+  error "Homebrew install failed or brew not found"
 fi
 
 # ───── k9s ─────
