@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # DevOps Workstation Setup Script for RHEL EC2
-# Author: Pavan Kumar Divi | Generated on 2025-07-31 13:00:45
+# Author: Pavan Kumar Divi | Updated on 2025-07-31 13:00:45
 
 # ───── Colors ─────
 RED='\033[1;31m'
@@ -49,50 +49,11 @@ tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
 install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
 success "eksctl installed"
 
-# ───── kubectl ─────
-log "Installing kubectl..."
-KUBECTL_VER=$(curl -s https://dl.k8s.io/release/stable.txt)
-curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" >> "$LOG_FILE" 2>&1
-curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl.sha256" >> "$LOG_FILE" 2>&1
-
-if [[ -f "kubectl" && -f "kubectl.sha256" ]]; then
-  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check >> "$LOG_FILE" 2>&1
-  chmod +x kubectl
-  mv kubectl /usr/local/bin/kubectl
-  KUBE_VERSION_OUTPUT=$(kubectl version --client --short 2>/dev/null || echo "Not available")
-  success "kubectl installed. Version: $KUBE_VERSION_OUTPUT"
-else
-  error "kubectl or checksum file missing. Install failed"
-fi
-
 # ───── kubens ─────
 log "Installing kubens..."
 curl -sS https://webi.sh/kubens | sh >> "$LOG_FILE" 2>&1
 source ~/.config/envman/PATH.env >> "$LOG_FILE" 2>&1
 success "kubens installed"
-
-# ───── Homebrew ─────
-log "Installing Homebrew with dependencies..."
-dnf install -y gcc git curl file bzip2 >> "$LOG_FILE" 2>&1
-export NONINTERACTIVE=1
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >> "$LOG_FILE" 2>&1
-
-BREW_PREFIX="/home/linuxbrew/.linuxbrew"
-if [[ -x "$BREW_PREFIX/bin/brew" ]]; then
-  eval "$($BREW_PREFIX/bin/brew shellenv)"
-  echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /etc/profile.d/brew.sh
-  success "Homebrew installed and configured"
-else
-  error "Homebrew install failed or brew not found"
-fi
-
-# ───── k9s ─────
-log "Installing k9s..."
-if command -v brew &>/dev/null; then
-  brew install derailed/k9s/k9s >> "$LOG_FILE" 2>&1 && success "k9s installed" || error "k9s installation failed"
-else
-  error "Skipping k9s: Homebrew not available"
-fi
 
 # ───── Done ─────
 log "${GREEN}All tools installed successfully.${RESET}"
