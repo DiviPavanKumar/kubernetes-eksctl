@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # DevOps Workstation Setup Script for RHEL EC2
-# Author: Pavan Kumar Divi | Updated on 2025-07-31 13:00:45
+# Author: Pavan Kumar Divi | Updated on 2025-07-31
 
 # ───── Colors ─────
 RED='\033[1;31m'
@@ -35,7 +35,11 @@ dnf remove -y docker* podman runc >> "$LOG_FILE" 2>&1
 dnf -y install dnf-plugins-core >> "$LOG_FILE" 2>&1
 dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo >> "$LOG_FILE" 2>&1
 dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >> "$LOG_FILE" 2>&1
-systemctl enable --now docker >> "$LOG_FILE" 2>&1 && success "Docker service started" || error "Docker service failed"
+
+systemctl enable --now docker >> "$LOG_FILE" 2>&1 && \
+success "Docker service started" || \
+error "Docker service failed to start"
+
 usermod -aG docker ec2-user >> "$LOG_FILE" 2>&1
 log "${YELLOW}NOTE:${RESET} Reboot the EC2 instance to apply Docker group membership"
 success "Docker installed successfully"
@@ -48,6 +52,22 @@ curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$
 tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
 install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
 success "eksctl installed"
+
+# ───── kubectl ─────
+log "Installing kubectl..."
+KUBECTL_VER=$(curl -s https://dl.k8s.io/release/stable.txt)
+
+curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" >> "$LOG_FILE" 2>&1
+curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl.sha256" >> "$LOG_FILE" 2>&1
+
+if [[ -f "kubectl" && -f "kubectl.sha256" ]]; then
+  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check >> "$LOG_FILE" 2>&1
+  install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl >> "$LOG_FILE" 2>&1
+  KUBE_VERSION_OUTPUT=$(kubectl version --client --short 2>/dev/null || echo "Version check failed")
+  success "kubectl installed. Version: $KUBE_VERSION_OUTPUT"
+else
+  error "kubectl or checksum file missing. Install failed"
+fi
 
 # ───── kubens ─────
 log "Installing kubens..."
