@@ -53,22 +53,6 @@ tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
 install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
 success "eksctl installed"
 
-# ───── kubectl ─────
-log "Installing kubectl..."
-KUBECTL_VER=$(curl -s https://dl.k8s.io/release/stable.txt)
-
-curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" >> "$LOG_FILE" 2>&1
-curl -LO "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl.sha256" >> "$LOG_FILE" 2>&1
-
-if [[ -f "kubectl" && -f "kubectl.sha256" ]]; then
-  echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check >> "$LOG_FILE" 2>&1
-  install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl >> "$LOG_FILE" 2>&1
-  KUBE_VERSION_OUTPUT=$(kubectl version --client --short 2>/dev/null || echo "Version check failed")
-  success "kubectl installed. Version: $KUBE_VERSION_OUTPUT"
-else
-  error "kubectl or checksum file missing. Install failed"
-fi
-
 # ───── kubens ─────
 log "Installing kubens..."
 curl -sS https://webi.sh/kubens | sh >> "$LOG_FILE" 2>&1
